@@ -1,4 +1,3 @@
-// src/modules/spl/services/stake-pool.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { StakePoolReqDto } from './dto/stake-pool-req.dto';
 import { StakePoolResDto } from './dto/stake-pool-res.dto';
@@ -7,6 +6,7 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { IpfsService } from '../ipfs/ipfs-service';
 
 const execAsync = promisify(exec);
 
@@ -16,7 +16,10 @@ export class StakePoolService {
   private readonly sanctumMintAuthority =
     'GRwm4EXMyVwtftQeTft7DZT3HBRxx439PrKq4oM6BwoZ';
 
+  constructor(private ipfsService: IpfsService) {}
+
   async update(poolAddress: string): Promise<void> {
+    // 기존 로직 유지
     const scriptPath = path.join(process.cwd(), 'scripts', 'update_epoch.sh');
 
     try {
@@ -31,19 +34,32 @@ export class StakePoolService {
     }
   }
 
-  tokenMint(req: StakePoolReqDto): StakePoolResDto {
+  async tokenMint(req: StakePoolReqDto): Promise<StakePoolResDto> {
     let metadataFile: string | null = null;
 
     try {
-      // Create metadata file
-      metadataFile = this.createMetadataFile(req);
+      // 1. 토큰 메타데이터를 IPFS에 업로드
+      const metadataUri = await this.ipfsService.uploadTokenMetadata(
+        req.name,
+        req.symbol,
+        req.description,
+        req.image,
+      );
 
-      // Log metadata file content
+      this.logger.log(`Token metadata uploaded to IPFS: ${metadataUri}`);
+
+      // 2. 메타보스용 메타데이터 파일 생성
+      metadataFile = this.createMetadataFile({
+        ...req,
+        uri: metadataUri, // IPFS 메타데이터 URI
+      });
+
+      // 로그 기록
       const metadataContent = fs.readFileSync(metadataFile, 'utf8');
       this.logger.log(`Created metadata file content: ${metadataContent}`);
       this.logger.log(`Metadata file path: ${metadataFile}`);
 
-      // Metaboss command
+      // 3. Metaboss 명령 실행하여 토큰 생성
       const command = [
         'metaboss',
         'create',
@@ -57,17 +73,18 @@ export class StakePoolService {
       const commandStr = command.join(' ');
       this.logger.log(`Executing: ${commandStr}`);
 
-      // Execute process
+      // 프로세스 실행
       const output = execSync(commandStr, { encoding: 'utf8' });
 
-      // Extract values
+      // 결과값 추출
       const transactionId = this.extractValue(output, 'Signature: ') || '';
       const tokenAddress = this.extractValue(output, 'Mint: ') || '';
       const metadataAddress = this.extractValue(output, 'Metadata: ') || '';
 
-      // Disable Freeze Authority
+      // 4. 권한 관리
       if (tokenAddress) {
         try {
+          // Freeze Authority 비활성화
           const disableFreezeCommand = [
             'spl-token',
             'authorize',
@@ -82,7 +99,7 @@ export class StakePoolService {
           execSync(disableFreezeCommand.join(' '), { encoding: 'utf8' });
           this.logger.log('Freeze authority disabled successfully');
 
-          // Transfer Mint Authority to Sanctum
+          // Mint Authority를 Sanctum으로 이전
           const transferMintCommand = [
             'spl-token',
             'authorize',
@@ -116,11 +133,10 @@ export class StakePoolService {
       this.logger.error('Error during token creation', error);
       return new StakePoolResDto(`Error: ${error.message}`);
     } finally {
-      // Delete temporary metadata file
+      // 임시 파일 정리
       if (metadataFile && fs.existsSync(metadataFile)) {
         try {
           fs.unlinkSync(metadataFile);
-          // 임시 디렉토리도 삭제
           fs.rmdirSync(path.dirname(metadataFile));
         } catch (deleteError) {
           this.logger.warn(
@@ -136,27 +152,26 @@ export class StakePoolService {
     return line ? line.substring(prefix.length).trim() : null;
   }
 
-  private createMetadataFile(req: StakePoolReqDto): string {
-    // Create a temporary file
+  private createMetadataFile(req: StakePoolReqDto & { uri: string }): string {
+    // 임시 파일 생성
     const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'temp-'));
     const tempFile = path.join(tempDir, `metadata-${Date.now()}.json`);
 
-    // Metadata JSON
+    // 메타데이터 JSON
     const metadata = JSON.stringify(
       {
         name: req.name,
         symbol: req.symbol,
-        signature: 'forest_pad_official',
         originTokenAddress: req.originTokenAddress,
-        uri: req.uri,
+        uri: req.uri, // IPFS 메타데이터 URI
         seller_fee_basis_points: req.sellerFeeBasisPoints,
-        creators: [],
+        creators: req.creators ? JSON.parse(req.creators) : [],
       },
       null,
       2,
     );
 
-    // Write metadata to file
+    // 파일에 메타데이터 작성
     fs.writeFileSync(tempFile, metadata);
     this.logger.log(`Metadata file created: ${tempFile}`);
 
