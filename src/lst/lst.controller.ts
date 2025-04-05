@@ -5,7 +5,7 @@ import { LstResponse } from './lst.types';
 import { LstResponseDto } from './lst.dto';
 
 @ApiTags('LST')
-@Controller('v1/lsts')
+@Controller('v1/api/lsts')
 export class LstController {
   constructor(private readonly lstService: LstService) {}
 

@@ -6,8 +6,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const config = new DocumentBuilder()
-    .setTitle('Solana API')
-    .setDescription('The Solana LST and Rewards API documentation')
+    .setTitle('ForestPod API')
+    .setDescription('The ForestPod LST and Rewards API documentation')
     .setVersion('1.0')
     .build();
 
