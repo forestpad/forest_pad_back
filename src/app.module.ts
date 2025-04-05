@@ -9,7 +9,7 @@ import { LstModule } from './lst/lst.module';
     ScheduleModule.forRoot(),
     StakePoolModule,
     RewardsModule,
-    LstModule
-  ]
+    LstModule,
+  ],
 })
 export class AppModule {}
