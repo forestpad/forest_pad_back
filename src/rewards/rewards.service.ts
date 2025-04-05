@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js';
+import { Connection, Transaction, Keypair } from '@solana/web3.js';
 
 @Injectable()
 export class RewardsService {

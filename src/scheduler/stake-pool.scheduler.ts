@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { StakePoolService } from './stake-pool.service';
+import { StakePoolService } from '../stake-pool/stake-pool.service';
 
 @Injectable()
 export class StakePoolScheduler {
